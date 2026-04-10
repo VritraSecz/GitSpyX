@@ -15,8 +15,8 @@
 
 [![Python](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Linux-lightgrey.svg)](#compatibility)
-[![Version](https://img.shields.io/badge/version-2.2.0-brightgreen.svg)](#overview)
+[![Platform](https://img.shields.io/badge/platform-cross--platform-lightgrey.svg)](#requirements)
+[![Version](https://img.shields.io/badge/version-2.3.0-brightgreen.svg)](#overview)
 [![Status](https://img.shields.io/badge/status-stable-success.svg)](#overview)
 [![Maintained](https://img.shields.io/badge/maintained-yes-green.svg)](#contributing)
 [![Stars](https://img.shields.io/github/stars/VritraSecz/GitSpyX?style=social)](https://github.com/VritraSecz/GitSpyX)
@@ -50,32 +50,37 @@
 
 ### Key Highlights
 
-- 🕵️ **Comprehensive Intelligence**: Gather detailed information on users, repos, and orgs.
--  CLI Interface: Clean, and user-friendly command-line interface.
-- 💾 **JSON Output**: Save all gathered information to a JSON file for later analysis.
-- 🐍 **Python-Powered**: Built with modern Python libraries like `rich` and `requests`.
+- 🕵️ **Comprehensive intelligence**: Users, public repos, single-repo details, user search, and organizations.
+- 💻 **CLI + Rich**: Colored tables, optional progress mode, and readable UTC timestamps in the terminal.
+- 💾 **JSON export**: Raw GitHub API-shaped data under `output-gitspyx/` for pipelines and reports.
+- 🐍 **Stack**: Python 3, `requests`, and `rich`.
 
 ## ✨ Features
 
 ### Core Functionality
-- **User Profile**: Fetches and displays a GitHub user's profile.
-- **User Repositories**: Fetches and displays a user's public repositories.
-- **Repository Details**: Fetches and displays details for a specific repository.
-- **Search Users**: Searches for users on GitHub.
-- **Organization Details**: Fetches and displays details for a GitHub organization.
-- **Save Output**: Saves all the gathered data to a JSON file in the `output-gitspyx` directory.
+- **User profile**: Public fields from `GET /users/{username}` (including **Profile updated** = account metadata `updated_at`).
+- **User repositories**: Paginated public repos (`GET /users/{username}/repos`) with name, language, stars, forks, and URL.
+- **Repository investigation**: Full repo object via `GET /repos/{owner}/{repo}` — license, topics, forks, issues, homepage, etc.
+- **Search users**: `GET /search/users` with your query string.
+- **Organization**: Public org details from `GET /orgs/{org}`.
+- **JSON export**: Successful runs write timestamped files under `output-gitspyx/` (raw API JSON for scripting; see below).
 
-### User Experience
-- **Interactive Tables**: Displays information in a clean, easy-to-read table format.
-- **Color-coded Output**: Uses colors to highlight important information.
-- **Progress Bars**: Shows progress when fetching large amounts of data.
-- **Command-line Arguments**: Provides a rich set of command-line arguments for all features.
+### Accurate GitHub metrics (v2.3+)
+- **Watchers** in repo details uses **`subscribers_count`** (people watching for notifications). GitHub’s REST **`watchers_count`** on repositories often matches **stars**, not true watchers.
+- **Last push** shows **`pushed_at`** (last git push). **Repo activity (issues/stars, etc.)** shows **`updated_at`**, which changes on many non-push events.
+- **Homepage** is shown as the plain URL from the API when set; empty values show as `N/A`.
+
+### User experience
+- **Human-readable dates** in tables (e.g. `28 July 2025 at 00:45:21 UTC`); saved JSON still uses GitHub’s ISO-8601 strings.
+- **HTTP client**: `Accept: application/vnd.github+json`, a proper `User-Agent`, and a **30s** timeout on each request.
+- **Rich tables & colors**: Terminal output via [Rich](https://github.com/Textualize/rich).
+- **Progress bars**: When using `--no-display` with a username, bulk fetch shows progress.
 
 ## 📋 Requirements
 
 ### System Requirements
-- **Python**: Version 3.7 or higher
-- **Operating System**: Linux
+- **Python**: 3.7 or higher (3.9+ recommended)
+- **Operating System**: Linux, macOS, or Windows (any OS with Python 3)
 - **Internet Connection**: Required for GitHub API access
 
 ### Python Dependencies
@@ -104,56 +109,56 @@ cd GitSpyX
 pip install -r requirements.txt
 
 # Run the application
-python gitspyx.py --help
+python3 gitspyx.py --help
 ```
 
 ## 🎯 Usage
 
-GitSpyX is a command-line tool. Here are some examples of how to use it:
+Run the script as `python3 gitspyx.py …` from the project folder, or use the `gitspyx` entry point if you installed from PyPI.
 
-### User Investigation
+### User investigation
 ```bash
-# Get a user's profile
-gitspyx -u <username>
+# Profile only
+python3 gitspyx.py -u <username>
 
-# Get a user's repositories
-gitspyx -u <username> -r
+# Profile + all public repositories (paginated)
+python3 gitspyx.py -u <username> -r
 
-# Investigate a specific repository
-gitspyx -u <username> -i <repo_name>
+# Deep-dive one repo (must use -u)
+python3 gitspyx.py -u <username> -i <repo_name>
 ```
 
-### Searching
+### Search & organizations
 ```bash
-# Search for users
-gitspyx -s "search_query"
+# Search GitHub users (keep special characters in mind for complex queries)
+python3 gitspyx.py -s "search_query"
+
+# Public organization metadata
+python3 gitspyx.py -o <organization_name>
 ```
 
-### Organization
-```bash
-# Get details for an organization
-gitspyx -o <organization_name>
-```
+### JSON output
+Whenever the tool collects data, it also writes **`output-gitspyx/<slug>-<DDMMYY-HHMMSS>.json`** (UTC-based timestamp in the filename). The JSON mirrors the GitHub API payloads (unmodified field names and ISO dates).
 
-### Saving Output
-All commands will automatically save the output to a JSON file in the `output-gitspyx` directory. To suppress the detailed output in the terminal and only save the data, use the `--no-display` flag.
+### Quiet / batch mode
+`--no-display` **only** works as:
 
 ```bash
-# Fetch all data for a user and save it without displaying it in the terminal
-gitspyx -u <username> --no-display
+python3 gitspyx.py -u <username> --no-display
 ```
 
-### Other
+It fetches **profile + all repositories** with a progress bar, **no Rich tables**, and saves JSON. It cannot be combined with `-r`, `-i`, `-s`, `-o`, `--about`, `--connect`, or `-v` (the script will print an error).
+
+### Other commands
 ```bash
-# Show the about section
-gitspyx --about
-
-# Show contact information
-gitspyx --connect
-
-# Show the version
-gitspyx -v
+python3 gitspyx.py --about    # Tool description
+python3 gitspyx.py --connect  # Author links
+python3 gitspyx.py -v         # Version (2.3.0)
+python3 gitspyx.py            # Banner + help
 ```
+
+### Rate limits
+Unauthenticated requests use GitHub’s **public** rate limits. For heavier use, consider a personal access token in a future release or wrap calls with your own authenticated client.
 
 ## 🖼️ Screenshots
 

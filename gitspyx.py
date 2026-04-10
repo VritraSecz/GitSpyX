@@ -3,14 +3,14 @@
 """
 - Project GitSpyX: Fetches GitHub user data and lists public repositories using the GitHub API
 - Author: Alex Butler [Vritra Security Organization]
-- Version: 2.2.0
+- Version: 2.3.0
 """
 
 import argparse
 import requests
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from time import sleep
 from rich.console import Console
 from rich.table import Table
@@ -19,6 +19,33 @@ from rich.text import Text
 from rich.progress import Progress
 
 console = Console()
+
+GITHUB_HEADERS = {
+    "Accept": "application/vnd.github+json",
+    "User-Agent": "GitSpyX/2.3 (OSINT; VritraSecz)",
+}
+
+
+def _format_github_datetime(iso_str):
+    """
+    Format GitHub API timestamps (e.g. 2025-07-28T00:45:21Z) for display.
+    Output is UTC, human-readable: '28 July 2025 at 00:45:21 UTC'.
+    """
+    if iso_str is None:
+        return "N/A"
+    s = str(iso_str).strip()
+    if not s or s.upper() == "N/A":
+        return "N/A"
+    try:
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = dt.astimezone(timezone.utc)
+    except (ValueError, TypeError, OSError):
+        return s
+    return dt.strftime("%d %B %Y at %H:%M:%S UTC")
+
 
 def print_banner():
     banner = r"""
@@ -35,7 +62,7 @@ def print_banner():
 
 def get_github_data(url):
     try:
-        response = requests.get(url)
+        response = requests.get(url, headers=GITHUB_HEADERS, timeout=30)
         if response.status_code == 404:
             return None
         response.raise_for_status()
@@ -83,8 +110,8 @@ def display_user_profile(username, progress=None):
         table.add_row("• Twitter", f"@{profile_data.get('twitter_username', 'N/A')}" if profile_data.get('twitter_username') else 'N/A')
         table.add_row("• Hireable", "Yes" if profile_data.get('hireable') else "No")
         table.add_row("• Avatar URL", profile_data.get('avatar_url', 'N/A'))
-        table.add_row("• Created At", profile_data.get('created_at', 'N/A'))
-        table.add_row("• Updated At", profile_data.get('updated_at', 'N/A'))
+        table.add_row("• Created At", _format_github_datetime(profile_data.get("created_at")))
+        table.add_row("• Profile updated", _format_github_datetime(profile_data.get("updated_at")))
 
         console.print(table)
     return profile_data
@@ -161,20 +188,26 @@ def display_repo_details(username, repo_name, no_display=False):
         table.add_row("• Full Name", repo_data.get('full_name', 'N/A'))
         table.add_row("• Description", repo_data.get('description', 'N/A'))
         table.add_row("• URL", repo_data.get('html_url', 'N/A'))
-        table.add_row("• Homepage", repo_data.get('homepage', 'N/A'))
+        hp = repo_data.get("homepage")
+        homepage_val = hp.strip() if isinstance(hp, str) and hp.strip() else "N/A"
+        table.add_row("• Homepage", homepage_val)
         table.add_row("• Language", repo_data.get('language', 'N/A'))
         table.add_row("• Default Branch", repo_data.get('default_branch', 'N/A'))
         table.add_row("• Size (KB)", str(repo_data.get('size', 'N/A')))
         table.add_row("• Stars", str(repo_data.get('stargazers_count', 0)))
-        table.add_row("• Watchers", str(repo_data.get('watchers_count', 0)))
+        subs = repo_data.get("subscribers_count")
+        table.add_row("• Watchers", str(subs if subs is not None else 0))
         table.add_row("• Forks", str(repo_data.get('forks_count', 0)))
         table.add_row("• Open Issues", str(repo_data.get('open_issues_count', 0)))
         license_info = repo_data.get('license')
         table.add_row("• License", license_info['name'] if license_info else 'N/A')
         table.add_row("• Topics", ", ".join(repo_data.get('topics', [])))
-        table.add_row("• Created At", repo_data.get('created_at', 'N/A'))
-        table.add_row("• Updated At", repo_data.get('updated_at', 'N/A'))
-        table.add_row("• Pushed At", repo_data.get('pushed_at', 'N/A'))
+        table.add_row("• Created At", _format_github_datetime(repo_data.get("created_at")))
+        table.add_row("• Last push", _format_github_datetime(repo_data.get("pushed_at")))
+        table.add_row(
+            "• Repo activity (issues/stars, etc.)",
+            _format_github_datetime(repo_data.get("updated_at")),
+        )
         table.add_row("• Is Fork", "Yes" if repo_data.get('fork') else "No")
         if repo_data.get('fork'):
             parent_repo = repo_data.get('parent', {})
@@ -228,7 +261,7 @@ def get_org_details(org_name, no_display=False):
         table.add_row("• Followers", str(org_data.get('followers', 0)))
         table.add_row("• Blog", org_data.get('blog', 'N/A'))
         table.add_row("• Email", org_data.get('email', 'N/A'))
-        table.add_row("• Created At", org_data.get('created_at', 'N/A'))
+        table.add_row("• Created At", _format_github_datetime(org_data.get("created_at")))
 
         console.print(table)
     return org_data
@@ -261,7 +294,7 @@ def show_about():
     From user profiles and repository details to organization memberships and contribution patterns, GitSpyX provides a comprehensive intelligence overview in a clean, user-friendly format. 
     Whether you're conducting security assessments or just curious about GitHub projects, GitSpyX is your go-to spyglass.
 
-    This tool is developed and maintained by VritraSecz from Vritra Security Organization.
+    This tool is developed and maintained by VritraSec from Vritra Security Organization.
     """
     console.print(Panel(Text(about_text, justify="center"), title="About GitSpyX", border_style="bold #4A90E2"))
 
@@ -270,7 +303,7 @@ def show_connect():
     Connect with the developer and support the project:
 
     GitHub:    https://github.com/VritraSecz
-    Instagram: https://instagram.com/haxorlex
+    Instagram: https://instagram.com/vritrasec
     YouTube:   https://youtube.com/@Technolex
     Website:   https://vritrasec.com
     Community: t.me/VritraSecz
@@ -316,7 +349,7 @@ def main():
 
     # Handle standalone flags
     if args.version:
-        console.print("[bold #4A90E2]GitSpyX Version: 2.2.0[/bold #4A90E2]")
+        console.print("[bold #4A90E2]GitSpyX Version: 2.3.0[/bold #4A90E2]")
         return
     
     if args.about:
